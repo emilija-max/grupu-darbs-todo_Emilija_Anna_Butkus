@@ -1,72 +1,281 @@
-<!-- 
-
+<!--
 Darba pirmo versiju taisīja: Emilija Anna Butkus
-
+Darbs otro versiju taisīja: Ēriks Brūveris
+Darbs trešo versiju taisīja: Emilija Anna Butkus
 -->
 
 <!DOCTYPE html>
 <html lang="lv">
-    <head>
-        <title>Klases darbs</title>
-        <meta charset="UTF-8">
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body class="bg-light">
 
-        <div class="container mt-5">
-            <div class="card shadow-sm">
+<head>
+    <meta charset="UTF-8">
+    <title>Klases darbs</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        /* pārsvītrots teksts (pabeigts uzdevums) */
+        .svitra {
+            text-decoration: line-through;
+            color: gray;
+            cursor:pointer;
+        }
+        
+        /* pievieno kursora izskatu */
+        .task-text {
+            cursor: pointer;
+        }
+
+        /* paslēpts elements (filtrēšanai) */
+        .task-item.hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+    <div class="container mt-5">
+        <div class="card shadow-sm">
             <div class="card-body">
                 <h3 class="card-title mb-4">Mani darbi</h3>
-
+                
+                <!-- ievades lauks + prioritāte -->
                 <div class="input-group mb-3">
-                <input type="text" id="task-input" class="form-control" placeholder="Ieraksti jaunu darbu...">
-                <button class="btn btn-primary" id="add-task">Pievienot</button>
+                    <select id="prio" class="form-select" style="max-width: 120px;">
+                        <option value="low" selected>Zema</option>
+                        <option value="medium">Vidēja</option>
+                        <option value="high">Svarīgs</option>
+                    </select>
+                    
+                    <input type="text" id="task-input" class="form-control" placeholder="Ieraksti jaunu darbu...">
+                    <button class="btn btn-primary" id="add-task">Pievienot</button>
                 </div>
 
-                <ul id="task-list" class="list-group"></ul>
-            </div>
+                <!-- filtri + meklēšana -->
+                <div class="row mb-3 g-2">
+                    <div class="col-md-8">
+                        <div class="btn-group w-100" role="group">
+                            <button type="button" class="btn btn-outline-secondary active" onclick="filterTasks('all', this)">Visi</button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="filterTasks('active', this)">Aktīvie</button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="filterTasks('completed', this)">Pabeigtie</button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" id="search-input" class="form-control" placeholder="Meklēt uzdevumu..." oninput="applyFilters()">
+                    </div>
+                </div>
+                
+                <!-- uzdevumu saraksts -->
+                <ul id="task-list" class="list-group mb-3"></ul>
+
+                <!-- statistika + dzēšana -->
+                <div class="d-flex justify-content-between align-items-center border-top pt-3">
+                    <span id="task-count" class="text-muted small">Atlikuši 0 darbi</span>
+                    <button class="btn btn-sm btn-outline-danger" onclick="clearCompleted()">Notīrīt pabeigtos</button>
+                </div>
             </div>
         </div>
+    </div>
+    
+    <script>
+        let currentFilter = 'all';
 
-        <!-- JavaScript -->
-        <script>
-            const input = document.getElementById('task-input');
-            const addBtn = document.getElementById('add-task');
-            const taskList = document.getElementById('task-list');
-
-            addBtn.onclick = function() {
+        // ielādē datus no localStorage
+        window.onload = function () {
+            loadData();
+            updateStats();
+        };
+        
+        const input = document.getElementById('task-input');
+        const addBtn = document.getElementById('add-task');
+        const taskList = document.getElementById('task-list');
+        
+        // pievienot jaunu uzdevumu
+        addBtn.onclick = function () {
             const taskText = input.value.trim();
+            const priority = document.getElementById("prio").value;
+            
             if (taskText !== "") {
-                addTask(taskText);
-                saveTasks();
+                addTask(taskText, false, priority);
+                saveData();
                 input.value = "";
+                applyFilters();
             }
-            };
+        };
 
-            function addTask(text) {
+        // funkcija, kas izveido uzdevumu
+        function addTask(text, completed = false, priority = "low") {
             const li = document.createElement('li');
-            li.className = "list-group-item d-flex justify-content-between align-items-center";
-            li.textContent = text;
+            li.className = "list-group-item d-flex justify-content-between align-items-center task-item";
+            
+            // container priekš badge + teksta
+            const textContainer = document.createElement("div");
+            textContainer.className = "d-flex align-items-center flex-grow-1";
+            
+            // prioritātes badge
+            const badge = document.createElement("span");
+            badge.className = "badge me-2";
+            updateBadgeStyle(badge, priority);
+            
+            // uzdevuma teksts
+            const textSpan = document.createElement('span');
+            textSpan.textContent = text;
+            textSpan.classList.add('task-text');
 
-            const delBtn = document.createElement('button');
-            delBtn.className = "btn btn-danger btn-sm";
-            delBtn.textContent = "Dzēst";
-            delBtn.onclick = function() {
-                li.remove();
-                saveTasks();
+            // ja pabeigts, tad pārsvītro
+            if (completed) textSpan.classList.add('svitra');
+            
+            // klikšķis, tad pabeigts/nepabeigts
+            textSpan.onclick = function () {
+                textSpan.classList.toggle('svitra');
+                saveData();
+                updateStats();
+                applyFilters();
             };
+            
+            textContainer.appendChild(badge);
+            textContainer.appendChild(textSpan);
+            
+            const btnGroup = document.createElement('div');
 
-            li.appendChild(delBtn);
+            // labošanas poga
+            const editBtn = document.createElement('button');
+            editBtn.className = "btn btn-outline-info btn-sm me-1";
+            editBtn.textContent = "Labot";
+            editBtn.onclick = function() {
+                const newText = prompt("Labot uzdevumu:", textSpan.textContent);
+                if (newText !== null && newText.trim() !== "") {
+                    textSpan.textContent = newText.trim();
+                    saveData();
+                }
+            };
+            
+            // dzēšanas poga
+            const delBtn = document.createElement('button');
+            delBtn.className = "btn btn-outline-danger btn-sm";
+            delBtn.textContent = "Dzēst";
+            delBtn.onclick = function (e) {
+                li.remove();
+                saveData();
+                updateStats();
+            };
+            
+            btnGroup.appendChild(editBtn);
+            btnGroup.appendChild(delBtn);
+            
+            li.appendChild(textContainer);
+            li.appendChild(btnGroup);
             taskList.appendChild(li);
-            }
+        }
 
-            function saveTasks() {
-            const tasks = [];
-            document.querySelectorAll('#task-list li').forEach(li => {
-                tasks.push(li.firstChild.textContent);
-            });
-            localStorage.setItem('tasks', JSON.stringify(tasks));
+        // uzstāda badge stilu pēc prioritātes
+        function updateBadgeStyle(badge, priority) {
+            badge.classList.remove("bg-danger", "bg-warning", "bg-secondary", "text-dark");
+
+            if (priority === "high") {
+                badge.textContent = "SVARĪGS!";
+                badge.classList.add("bg-danger");
+            } else if (priority === "medium") {
+                badge.textContent = "Vidēja";
+                badge.classList.add("bg-warning", "text-dark");
+            } else {
+                badge.textContent = "Zema";
+                badge.classList.add("bg-secondary");
             }
-        </script>
-    </body>
+        }
+
+        // filtrēšana (visi / aktīvie / pabeigtie)
+        function filterTasks(filterType, btn) {
+            currentFilter = filterType;
+
+            // noņem active klasi
+            document.querySelectorAll('.btn-group .btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            applyFilters();
+        }
+
+        // pielieto filtrus + meklēšanu
+        function applyFilters() {
+            const searchText = document.getElementById('search-input').value.toLowerCase();
+            const items = document.querySelectorAll('.task-item');
+
+            items.forEach(li => {
+                const text = li.querySelector('span:last-child').textContent.toLowerCase();
+                const isCompleted = li.querySelector('span:last-child').classList.contains('svitra');
+                
+                let matchesFilter = false;
+
+                if (currentFilter === 'all') matchesFilter = true;
+                else if (currentFilter === 'active') matchesFilter = !isCompleted;
+                else if (currentFilter === 'completed') matchesFilter = isCompleted;
+
+                const matchesSearch = text.includes(searchText);
+
+                // parāda vai paslēpj
+                if (matchesFilter && matchesSearch) {
+                    li.classList.remove('hidden');
+                } else {
+                    li.classList.add('hidden');
+                }
+            });
+        }
+
+        // atjauno statistiku (cik palikuši)
+        function updateStats() {
+            const activeTasks = Array.from(document.querySelectorAll('.task-item span:last-child'))
+                                   .filter(span => !span.classList.contains('svitra')).length;
+
+            document.getElementById('task-count').textContent = `Atlikuši ${activeTasks} darbi`;
+        }
+
+        // izdzēš visus pabeigtos
+        function clearCompleted() {
+            document.querySelectorAll('.task-item').forEach(li => {
+                if (li.querySelector('span:last-child').classList.contains('svitra')) {
+                    li.remove();
+                }
+            });
+
+            saveData();
+            updateStats();
+        }
+        
+        // saglabā datus localStorage
+        function saveData() {
+            const tasks = [];
+
+            document.querySelectorAll('#task-list li').forEach(li => {
+                const textSpan = li.querySelector('div > span:last-child');
+                const badge = li.querySelector('div > span:first-child');
+
+                let priority;
+                
+                if (badge.classList.contains("bg-danger")) priority = "high";
+                else if (badge.classList.contains("bg-warning")) priority = "medium";
+                else priority = "low";
+                
+                tasks.push({
+                    text: textSpan.textContent,
+                    completed: textSpan.classList.contains('svitra'),
+                    priority: priority
+                });
+            });
+
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+        }
+        
+        // ielādē datus no localStorage
+        function loadData() {
+            const savedTasks = JSON.parse(localStorage.getItem('tasks')) || [];
+
+            taskList.innerHTML = "";
+
+            savedTasks.forEach(task => {
+                addTask(task.text, task.completed, task.priority);
+            });
+
+            updateStats();
+        }
+    </script>
+</body>
 </html>
